@@ -33,7 +33,7 @@ TOR_EXTRACT_DARWIN  := tar -xJf $(TOR_TARBALL_DARWIN) -C third_party/tor --strip
 
 # Windows: 下載 Expert Bundle（包含 tor daemon、桥接、pluggable transports）
 EXPERT_TARBALL := tor-expert-bundle-windows-x86_64-$(EXPERT_VERSION).tar.gz
-EXPERT_URL     := https://archive.torproject.org/tor-package-archive/torbrowser/$(EXPERT_VERSION)/$(EXPERT_TARBALL)
+EXPERT_URL     := https://dist.torproject.org/torbrowser/$(EXPERT_VERSION)/$(EXPERT_TARBALL)
 
 # ------------------------------------------------------------------
 # 目標定義
@@ -75,12 +75,24 @@ bundle-tor:
 	@echo "[*] Detected OS: $(DETECTED_OS)"
 ifeq ($(DETECTED_OS),Windows_NT)
 	@echo "[*] Preparing third_party/tor..."
-	@powershell -NoProfile -Command "New-Item -ItemType Directory -Force -Path 'third_party/tor' | Out-Null"
+	@powershell -NoProfile -Command "[System.IO.Directory]::CreateDirectory('third_party/tor') | Out-Null"
 	@echo "[*] Downloading Tor Expert Bundle: $(EXPERT_TARBALL)..."
-	@curl -L $(EXPERT_URL) -o $(EXPERT_TARBALL)
-	@echo "[*] Extracting to third_party/tor..."
-	@tar -xzf $(EXPERT_TARBALL) -C third_party/tor --strip-components=1
+	@powershell -NoProfile -Command "Invoke-WebRequest -Uri '$(EXPERT_URL)' -OutFile '$(EXPERT_TARBALL)'"
+	@echo "[*] Extracting to third_party/tor/...(Remain the top-level structure)"
+	@powershell -NoProfile -Command "tar.exe -xzf '$(EXPERT_TARBALL)' -C 'third_party/tor'"
+	@echo "[*] Rename tor/ to bin/ in third_party/tor/"
+	@powershell -NoProfile -Command "\
+		if (Test-Path 'third_party/tor/bin') { \
+			Write-Host '[*] Existing bin/ detected, removing...' ; \
+			Remove-Item 'third_party/tor/bin' -Recurse -Force ; \
+		} ; \
+		Move-Item 'third_party/tor/tor' 'third_party/tor/bin' \
+	"
 	@powershell -NoProfile -Command "Remove-Item -LiteralPath '$(EXPERT_TARBALL)' -Force"
+	@echo "[*] Create Data/Tor directory in third_party/tor/"
+	@powershell -NoProfile -Command "[System.IO.Directory]::CreateDirectory('third_party/tor/Data/Tor') | Out-Null"
+	@echo "[*] Move geoip, geoip6, and *.txt files to Data/Tor"
+	@powershell -NoProfile -Command "Get-ChildItem 'third_party/tor' -Include 'geoip','geoip6','*.txt' | Move-Item -Destination 'third_party/tor/Data/Tor'"
 else ifeq ($(DETECTED_OS),Linux)
 	@echo "[*] Preparing third_party/tor..."
 	@mkdir -p third_party/tor
