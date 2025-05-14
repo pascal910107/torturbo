@@ -41,7 +41,7 @@ func NewCircuit(t *tor.Tor, log zerolog.Logger, ctx context.Context) (*Circuit, 
     return c, nil
 }
 
-// heartbeat 定期用心跳測 RTT
+// heartbeat 定期用心跳測 RTT (Round Trip Time)
 func (c *Circuit) heartbeat(ctx context.Context) {
     for {
         select {

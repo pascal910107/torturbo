@@ -3,6 +3,7 @@ package tunnel
 import (
 	"context"
 	"net"
+	"path/filepath"
 	"time"
 
 	"github.com/cretz/bine/tor"
@@ -59,12 +60,15 @@ func (f *makeFactory) PassivateObject(ctx context.Context, obj *pool.PooledObjec
 func NewController(cfg Config) (*Controller, error) {
 	ctx, cancel := context.WithCancel(context.Background())
 	t, err := tor.Start(ctx, &tor.StartConf{
-		ExePath: cfg.TorBinaryPath,
-		DataDir: cfg.DataDir,
+		ExePath:     cfg.TorBinaryPath, // 指定 Tor 二進位檔的路徑，若為空則預設使用 PATH 中的 "tor"
+		DataDir:     cfg.DataDir,       // 指定 Tor 的資料目錄；若為空則在 TempDataDirBase 下建立臨時目錄
+		ControlPort: 0,       			// 指定要使用的控制埠（Controller Port）；若為 0 則由 Tor 自行選擇
+		// DebugWriter:  cfg.Logger,
 		ExtraArgs: []string{
 			"--Log", "notice stdout",
 			"--SocksPort", "auto",
-			"--ControlPort", "auto",
+			"--GeoIPFile", filepath.Join(filepath.Dir(filepath.Dir(cfg.TorBinaryPath)), "data", "geoip"),
+			"--GeoIPv6File", filepath.Join(filepath.Dir(filepath.Dir(cfg.TorBinaryPath)), "data", "geoip6"),
 		},
 	})
 	if err != nil {
@@ -77,14 +81,14 @@ func NewController(cfg Config) (*Controller, error) {
 
 	// 建 pool，並調整參數
 	p := pool.NewObjectPoolWithDefaultConfig(ctx, factory)
-	p.Config.MaxTotal = cfg.CircuitNum
-	p.Config.MaxIdle = cfg.CircuitNum
-	p.Config.MinIdle = 1
-	p.Config.TestOnBorrow = true  // 借用前呼叫 ValidateObject
-	p.Config.TestWhileIdle = true // 空閒時也驗證
-	p.Config.TimeBetweenEvictionRuns = time.Minute
-	p.Config.MinEvictableIdleTime = 5 * time.Minute
-	p.StartEvictor() // 啟動空閒檢查
+	p.Config.MaxTotal = cfg.CircuitNum              // 最多同時開幾條 Circuit
+	p.Config.MaxIdle = cfg.CircuitNum               // 最多閒置幾條 Circuit
+	p.Config.MinIdle = 1                            // 最少閒置幾條 Circuit, 最少保留一條，避免空池
+	p.Config.TestOnBorrow = true                    // 借用前呼叫 ValidateObject
+	p.Config.TestWhileIdle = true                   // 空閒時也定期驗證
+	p.Config.TimeBetweenEvictionRuns = time.Minute  // 每分鐘檢查一次
+	p.Config.MinEvictableIdleTime = 5 * time.Minute // 空閒超過 5 分鐘就回收
+	p.StartEvictor()                                // 啟動空閒檢查
 
 	return &Controller{
 		t:      t,
