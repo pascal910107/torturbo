@@ -21,6 +21,7 @@ func main() {
 	listen := flag.String("listen", "127.0.0.1:8118", "HTTP proxy listen address")
 	uiPort := flag.String("ui", "127.0.0.1:18000", "Web UI listen address")
 	dataDir := flag.String("datadir", "", "TorTurbo data directory (default: $HOME/.torturbo)")
+	torBundledDir := flag.String("torbundledir", "", "Path to Tor bundled directory (default: third_party/tor)")
 	verbose := flag.Bool("v", false, "enable debug logs")
 	flag.Parse()
 
@@ -31,6 +32,10 @@ func main() {
 	cfg := config.Default()
 	if *dataDir != "" {
 		cfg.DataDir = *dataDir
+	}
+
+	if *torBundledDir != "" {
+		cfg.TorBundledDir = *torBundledDir
 	}
 	if err := cfg.EnsureDirs(); err != nil {
 		log.Fatal().Err(err).Msg("create data directories failed")
@@ -44,8 +49,12 @@ func main() {
 	defer cacheStore.Close()
 
 	// Tor controller
+	torBinaryPath, err := cfg.TorBinaryPath()
+	if err != nil {
+		log.Fatal().Err(err).Msg("get tor binary path failed")
+	}
 	torCtl, err := tunnel.NewController(tunnel.Config{
-		TorBinaryPath: cfg.TorBinaryPath(),
+		TorBinaryPath: torBinaryPath,
 		DataDir:       cfg.TorDataDir(),
 		CircuitNum:    cfg.CircuitNum,
 		Logger:        log,

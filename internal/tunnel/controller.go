@@ -77,13 +77,13 @@ func NewController(cfg Config) (*Controller, error) {
 
 	// 建 pool，並調整參數
 	p := pool.NewObjectPoolWithDefaultConfig(ctx, factory)
-	p.Config.MaxTotal = cfg.CircuitNum
-	p.Config.MaxIdle = cfg.CircuitNum
-	p.Config.MinIdle = 1
+	p.Config.MaxTotal = cfg.CircuitNum	// 最多同時開幾條 Circuit
+	p.Config.MaxIdle = cfg.CircuitNum	// 最多閒置幾條 Circuit
+	p.Config.MinIdle = 1				// 最少閒置幾條 Circuit, 最少保留一條，避免空池
 	p.Config.TestOnBorrow = true  // 借用前呼叫 ValidateObject
-	p.Config.TestWhileIdle = true // 空閒時也驗證
-	p.Config.TimeBetweenEvictionRuns = time.Minute
-	p.Config.MinEvictableIdleTime = 5 * time.Minute
+	p.Config.TestWhileIdle = true // 空閒時也定期驗證
+	p.Config.TimeBetweenEvictionRuns = time.Minute // 每分鐘檢查一次
+	p.Config.MinEvictableIdleTime = 5 * time.Minute // 空閒超過 5 分鐘就回收
 	p.StartEvictor() // 啟動空閒檢查
 
 	return &Controller{
